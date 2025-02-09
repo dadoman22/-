@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الحضور والانصراف المتطور</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* تحسينات التنسيق */
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #f0f4f8;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+
+        .button-group {
+            display: grid;
+            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 25px;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+        }
+
+        th {
+            background: #f8f9fa;
+            color: #2c3e50;
+        }
+
+        .event-cell {
+            border-radius: 20px;
+            padding: 5px 12px;
+            display: inline-block;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            table {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="color: #2c3e50; text-align: center; margin-bottom: 30px;">🕒 نظام المراقبة الزمنية</h1>
+
+        <div class="input-section">
+            <input type="text" 
+                   id="employee-name" 
+                   placeholder="اسم الموظف بالكامل..." 
+                   class="form-input"
+                   style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; margin-bottom: 15px;">
+            <div id="error-message" style="color: #e74c3c; margin-bottom: 15px;"></div>
+        </div>
+
+        <div class="button-group">
+            <button id="check-in" style="background: #27ae60;">
+                <i class="fas fa-door-open"></i> تسجيل الدخول
+            </button>
+            <button id="check-out" style="background: #c0392b;">
+                <i class="fas fa-door-closed"></i> تسجيل الخروج
+            </button>
+            <button id="absent" style="background: #f1c40f; color: #2c3e50;">
+                <i class="fas fa-exclamation-triangle"></i> إبلاغ عن غياب
+            </button>
+        </div>
+
+        <div class="history-section">
+            <button id="toggle-history" style="background: #3498db; width: 100%; margin: 15px 0;">
+                <i class="fas fa-history"></i> عرض السجلات التاريخية
+            </button>
+
+            <div id="history-panel" style="display: none;">
+                <input type="date" id="history-date" 
+                       style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; margin: 10px 0;">
+                <div class="history-actions">
+                    <button id="fetch-history" style="background: #2ecc71;">
+                        <i class="fas fa-search"></i> بحث
+                    </button>
+                    <button id="clear-history" style="background: #95a5a6;">
+                        <i class="fas fa-trash"></i> مسح السجلات
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-section" style="margin-top: 25px;">
+            <table id="attendance-table">
+                <thead>
+                    <tr>
+                        <th>الموظف</th>
+                        <th>التاريخ والوقت</th>
+                        <th>الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- البيانات تظهر هنا -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<script>
+// ---- تحسينات النظام الأساسية ----
+const storageKey = date => `attendance_${date}`;
+
+// تحويل التاريخ إلى تنسيق عربي تفصيلي
+const formatArabicDate = (dateString) => {
+    const options = {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric'
+    };
+    return new Date(dateString).toLocaleDateString('ar-EG', options);
+};
+
+// نظام التحقق المتقدم
+const validate = {
+    name: name => {
+        if (!name.trim()) return 'يرجى إدخال اسم الموظف';
+        if (!/^[\u0600-\u06FF\s]+$/.test(name)) return 'الاسم يجب أن يكون بالعربية فقط';
+        return null;
+    },
+    action: (name, type, date) => {
+        const records = JSON.parse(localStorage.getItem(storageKey(date)) || '[]');
+        const existing = records.find(r => r.name === name && r.type === type);
+        return existing ? `تم تسجيل ${type} مسبقاً لهذا الموظف` : null;
+    }
+};
+
+// نظام إدارة السجلات
+const recordsManager = {
+    add: (name, type) => {
+        const now = new Date();
+        const dateKey = now.toISOString().split('T')[0];
+        const record = {
+            name,
+            type,
+            timestamp: now.toISOString()
+        };
+        
+        const records = JSON.parse(localStorage.getItem(storageKey(dateKey)) || '[]');
+        records.push(record);
+        localStorage.setItem(storageKey(dateKey), JSON.stringify(records));
+        return records;
+    },
+
+    get: date => {
+        return JSON.parse(localStorage.getItem(storageKey(date)) || '[]');
+    },
+
+    clear: date => {
+        localStorage.removeItem(storageKey(date));
+    }
+};
+
+// نظام واجهة المستخدم
+const UI = {
+    updateTable: (records) => {
+        const tbody = document.querySelector('#attendance-table tbody');
+        tbody.innerHTML = records.map(record => `
+            <tr>
+                <td>${record.name}</td>
+                <td>${formatArabicDate(record.timestamp)}</td>
+                <td>
+                    <span class="event-cell" style="background: ${
+                        record.type === 'حضور' ? '#27ae60' : 
+                        record.type === 'انصراف' ? '#c0392b' : '#f1c40f'
+                    }">
+                        ${record.type}
+                    </span>
+                </td>
+            </tr>
+        `).join('');
+    },
+
+    showAlert: (message, type = 'info') => {
+        const colors = {
+            success: '#27ae60',
+            error: '#c0392b',
+            info: '#3498db'
+        };
+        alert(message); // يمكن استبدال هذا بمكتبة تنبيهات أفضل
+    }
+};
+
+// ---- أحداث النظام ----
+document.querySelectorAll('button[id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const name = document.getElementById('employee-name').value.trim();
+        const errorElement = document
