@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الحضور والانصراف</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="date"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #check-in {
+            background-color: #28a745;
+            color: white;
+        }
+        #check-out {
+            background-color: #dc3545;
+            color: white;
+        }
+        #absent {
+            background-color: #ffc107;
+            color: black;
+        }
+        #fetch-by-date {
+            background-color: #007bff;
+            color: white;
+        }
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-top: -10px;
+            margin-bottom: 10px;
+        }
+        /* إخفاء حقل التاريخ وزر الاسترجاع في البداية */
+        #date-section {
+            display: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>نظام الحضور والانصراف</h1>
+
+        <!-- حقل إدخال الاسم -->
+        <label for="employee-name">اسم الموظف:</label>
+        <input type="text" id="employee-name" placeholder="أدخل اسمك هنا">
+        <div id="error-message" class="error"></div>
+
+        <!-- أزرار تسجيل الحضور والانصراف والغياب -->
+        <button id="check-in">تسجيل الحضور</button>
+        <button id="check-out">تسجيل الانصراف</button>
+        <button id="absent">تسجيل الغياب</button>
+
+        <!-- زر لعرض/إخفاء قسم التاريخ -->
+        <button id="show-date-section">التاريخ</button>
+
+        <!-- قسم التاريخ (مخفي في البداية) -->
+        <div id="date-section">
+            <label for="date-input">اختر تاريخًا لعرض البيانات:</label>
+            <input type="date" id="date-input">
+            <button id="fetch-by-date">عرض البيانات حسب التاريخ</button>
+        </div>
+
+        <!-- جدول عرض السجلات -->
+        <table id="attendance-table">
+            <thead>
+                <tr>
+                    <th>اسم الموظف</th>
+                    <th>التاريخ والوقت</th>
+                    <th>الحدث</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- هنا سيتم عرض سجلات الحضور والانصراف -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // الحصول على العناصر من DOM
+        const employeeNameInput = document.getElementById('employee-name');
+        const errorMessage = document.getElementById('error-message');
+        const checkInButton = document.getElementById('check-in');
+        const checkOutButton = document.getElementById('check-out');
+        const absentButton = document.getElementById('absent'); // زر الغياب
+        const showDateSectionButton = document.getElementById('show-date-section');
+        const dateSection = document.getElementById('date-section');
+        const dateInput = document.getElementById('date-input');
+        const fetchByDateButton = document.getElementById('fetch-by-date');
+        const attendanceTableBody = document.querySelector('#attendance-table tbody');
+
+        // دالة للحصول على مفتاح Local Storage الخاص بالتاريخ
+        function getLocalStorageKey(date) {
+            return `attendanceRecords_${date}`;
+        }
+
+        // دالة لتحويل التاريخ إلى تنسيق عربي
+        function formatDateToArabic(dateString) {
+            const options = { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric' };
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ar-EG', options);
+        }
+
+        // دالة للتحقق من صحة الإدخال
+        function validateInput() {
+            if (employeeNameInput.value.trim() === '') {
+                errorMessage.textContent = 'يرجى إدخال اسم الموظف.';
+                return false;
+            } else {
+                errorMessage.textContent = '';
+                return true;
+            }
+        }
+
+        // دالة لتحميل السجلات من Local Storage بناءً على التاريخ
+        function loadRecordsByDate(date) {
+            const key = getLocalStorageKey(date);
+            const storedRecords = localStorage.getItem(key);
+            if (storedRecords) {
+                return JSON.parse(storedRecords);
+            } else {
+                return [];
+            }
+        }
+
+        // دالة لحفظ السجلات في Local Storage بناءً على التاريخ
+        function saveRecordsToLocalStorage(date, records) {
+            const key = getLocalStorageKey(date);
+            localStorage.setItem(key, JSON.stringify(records));
+        }
+
+        // دالة لتحديث الجدول مع السجلات الجديدة
+        function renderTable(records) {
+            attendanceTableBody.innerHTML = ''; // مسح الجدول الحالي
+            records.forEach(record => {
+                const row = document.createElement('tr');
+                const nameCell = document.createElement('td');
+                const timeCell = document.createElement('td');
+                const eventCell = document.createElement('td');
+
+                nameCell.textContent = record.name;
+                timeCell.textContent = formatDateToArabic(record.time); // تحويل التاريخ إلى تنسيق عربي
+                eventCell.textContent = record.event;
+
+                row.appendChild(nameCell);
+                row.appendChild(timeCell);
+                row.appendChild(eventCell);
+                attendanceTableBody.appendChild(row);
+            });
+        }
+
+        // دالة لإضافة سجل جديد إلى الجدول
+        function addRecord(eventType) {
+            if (!validateInput()) {
+                return; // إذا كان الإدخال غير صحيح، لا تضيف السجل
+            }
+
+            const now = new Date();
+            const today = now.toISOString().split('T')[0]; // الحصول على التاريخ بصيغة YYYY-MM-DD
+            const record = {
+                name: employeeNameInput.value.trim(),
+                time: now.toISOString(), // تخزين الوقت بتنسيق ISO
+                event: eventType
+            };
+
+            let records = loadRecordsByDate(today); // تحميل السجلات الخاصة بيوم اليوم
+            records.push(record);
+            saveRecordsToLocalStorage(today, records); // حفظ السجلات في Local Storage
+            renderTable(records); // تحديث الجدول
+            employeeNameInput.value = ''; // مسح حقل الاسم بعد الإضافة
+        }
+
+        // عند الضغط على زر "عرض البيانات حسب التاريخ"
+        fetchByDateButton.addEventListener('click', () => {
+            const selectedDate = dateInput.value;
+            if (selectedDate) {
+                const records = loadRecordsByDate(selectedDate);
+                renderTable(records);
+            } else {
+                alert('يرجى اختيار تاريخ.');
+            }
+        });
+
+        // عند الضغط على زر "التاريخ"، يتم تبديل عرض/إخفاء قسم التاريخ
+        showDateSectionButton.addEventListener('click', () => {
+            if (dateSection.style.display === 'none' || dateSection.style.display === '') {
+                dateSection.style.display = 'block'; // عرض قسم التاريخ
+            } else {
+                dateSection.style.display = 'none'; // إخفاء قسم التاريخ
+            }
+        });
+
+        // إضافة مستمعين للزرار
+        checkInButton.addEventListener('click', () => addRecord('حضور'));
+        checkOutButton.addEventListener('click', () => addRecord('انصراف'));
+        absentButton.addEventListener('click', () => addRecord('غياب')); // إضافة حدث الغياب
+
+        // عند بدء الصفحة، قم بتحميل السجلات الخاصة بيوم اليوم
+        const today = new Date().toISOString().split('T')[0];
+        const records = loadRecordsByDate(today);
+        renderTable(records);
+    </script>
+
+</body>
+</html>
